@@ -1,0 +1,10 @@
+*.pyc
+*.pkl
+
+.ipynb_checkpoints
+
+data
+data.zip
+temp
+trained-models
+wandb
