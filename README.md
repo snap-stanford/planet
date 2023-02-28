@@ -1,5 +1,8 @@
 # PlaNet: Predicting population response to drugs via clinical knowledge graph
 
+PyTorch implementation of PlaNet, a geometric deep learning tool for predicting population response to drugs. PlaNet provides a new clinical knowledge graph that captures the relations between disease biology, drug chemistry, and population characteristics. Using this knowledge graph, PlaNet can take a population and drugs to be applied (e.g., a clinical trial) as an input and predict the efficacy and safety of the drugs for the population. For a detailed description of the algorithm, please see our manuscript ["Predicting population response to drugs via clinical knowledge graph"]().
+
+
 ## 1. Installation
 ### Environment
 Run the following commands to create a conda environment:
