@@ -20,6 +20,8 @@ pip install ogb==1.3.0 --no-deps
 ```
 After this installation, the `tokenizers` library version should be 0.10.3. In case you encounter an error about the `tokenizers` version, go to `<conda_path>/envs/<env_name>/lib/python3.8/site-packages/transformers/dependency_versions_check.py` and replace the `if pkg == "tokenizers": ...` block with `if pkg == "tokenizers": continue`.
 
+The total install time should be within 10 minutes.
+
 ### Data
 You can download all the data (knowledge graph, clinical trial dataset, models, etc.) from [**here (data.zip)**](https://nlp.stanford.edu/projects/myasu/PlaNet/data.zip). Unzip this, which will create a `./data` directory.
 
@@ -30,6 +32,8 @@ We provide a demo notebook for loading the PlaNet knowledge graph and clinical t
 ```
 notebooks/demo.ipynb
 ```
+
+The expected run time should be ~10 minutes.
 
 
 ## 3. Model training
