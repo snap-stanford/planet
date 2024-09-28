@@ -11,7 +11,7 @@ conda create -n planet python=3.8
 source activate planet
 
 pip install torch==1.10.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
-pip install transformers==4.4.2 datasets==2.7.1 tensorboard==2.11.0 pandas wandb sklearn seqeval matplotlib pyyaml seaborn anndata scanpy
+pip install transformers==4.4.2 datasets==2.7.1 tensorboard==2.11.0 pandas wandb scikit-learn seqeval matplotlib pyyaml seaborn anndata scanpy
 pip install setuptools==58.2.0 numpy==1.22.2
 
 pip install torch-scatter==2.0.9 torch-sparse==0.6.12 -f https://pytorch-geometric.com/whl/torch-1.10.1+cu113.html
@@ -22,9 +22,10 @@ After this installation, the `tokenizers` library version should be 0.10.3. In c
 
 The total install time should be within 10 minutes.
 
-### Data
-You can download all the data (knowledge graph, clinical trial dataset, models, etc.) from [**here (data.zip)**](https://nlp.stanford.edu/projects/myasu/PlaNet/data.zip). Unzip this, which will create a `./data` directory.
+Hardware requirement: 100GB RAM and GPU of 40GB memory
 
+### Data
+You can download all the data (knowledge graph, clinical trial dataset, models, etc.) from [**here (data.zip)**](https://snap.stanford.edu/planet/data.zip). Unzip this, which will create a `./data` directory.
 
 ## 2. Demo
 
@@ -51,6 +52,16 @@ To train a model for **adverse event prediction**, run commands in
 ```
 ../scripts/train_ae.sh
 ```
+
+## 4. If you want to use PlaNet models for new clinical trial data
+Overview: Running our models to predict for new clinical trials involves two steps:
+- (1) parse the trial (`notebooks/parse_clinical_trial.ipynb`) so that the trial data is preprocessed and linked to the PlaNet knowledge graph
+- (2) run the models to obtain safety or efficacy predictions (`notebooks/predict_for_new_clinial_trial.ipynb`)
+
+Specifically, to do this, follow the steps below:
+ - Download all the data and resources needed for trial data parsing from [**here (parsing_package.zip)**](https://snap.stanford.edu/planet/parsing_package.zip). Unzip this, which will create a `./parsing_package` directory. Install the dependencies by following `./parsing_package/README`
+ - Go to `./notebooks` directory and run `parse_clinical_trial.ipynb` to process a new clinical trial (e.g., NCT02370680)
+ - Finally, run `predict_for_new_clinial_trial.ipynb` to get AE, safety, and efficacy predictions for the new clinical trial.
 
 
 

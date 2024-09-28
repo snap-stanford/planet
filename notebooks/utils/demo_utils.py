@@ -107,7 +107,8 @@ def load_model(trained_model_path, _dataset=None, _verbose=False):
 
 
 def prepare_dataset(dataset):
-    x = dataset._get_data_x(dataset.df)
+    df = dataset.df
+    x = dataset._get_data_x(df)
     tensors = [x]
     tensors.extend([task_y for task_y in dataset.task_ys])
     tensors.extend([sample_weight_mask for sample_weight_mask in dataset.sample_weight_masks])
