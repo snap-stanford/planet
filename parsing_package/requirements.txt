@@ -1,0 +1,13 @@
+requests
+pandas
+PubChemPy==1.0.4
+nltk==3.6.6
+gensim
+stemming==1.0.1
+scipy
+numpy
+scikit-learn
+lxml
+networkx==2.4
+obonet==0.2.5
+goatools==1.0.15

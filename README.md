@@ -1,6 +1,6 @@
 # PlaNet: Predicting population response to drugs via clinical knowledge graph
 
-PyTorch implementation of PlaNet, a geometric deep learning tool for predicting population response to drugs. PlaNet provides a new clinical knowledge graph that captures the relations between disease biology, drug chemistry, and population characteristics. Using this knowledge graph, PlaNet can take a population and drugs to be applied (e.g., a clinical trial) as an input and predict the efficacy and safety of the drugs for the population. For a detailed description of the algorithm, please see our manuscript ["Predicting population response to drugs via clinical knowledge graph"]().
+PyTorch implementation of PlaNet, a geometric deep learning tool for predicting population response to drugs. PlaNet provides a new clinical knowledge graph that captures the relations between disease biology, drug chemistry, and population characteristics. Using this knowledge graph, PlaNet can take a population and drugs to be applied (e.g., a clinical trial) as an input and predict the efficacy and safety of the drugs for the population. For a detailed description of the algorithm, please see our manuscript ["Predicting population response to drugs via clinical knowledge graph"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10942490/).
 
 
 ## 1. Installation
@@ -55,13 +55,13 @@ To train a model for **adverse event prediction**, run commands in
 
 ## 4. If you want to use PlaNet models for new clinical trial data
 Overview: Running our models to predict for new clinical trials involves two steps:
-- (1) parse the trial (`notebooks/parse_clinical_trial.ipynb`) so that the trial data is preprocessed and linked to the PlaNet knowledge graph
+- (1) parse the trial (`parsing_package/parse_trial.py`) so that the trial data is preprocessed and linked to the PlaNet knowledge graph
 - (2) run the models to obtain safety or efficacy predictions (`notebooks/predict_for_new_clinial_trial.ipynb`)
 
 Specifically, to do this, follow the steps below:
- - Download all the data and resources needed for trial data parsing from [**here (parsing_package.zip)**](https://snap.stanford.edu/planet/parsing_package.zip). Unzip this, which will create a `./parsing_package` directory. Install the dependencies by following `./parsing_package/README`
- - Go to `./notebooks` directory and run `parse_clinical_trial.ipynb` to process a new clinical trial (e.g., NCT02370680)
- - Finally, run `predict_for_new_clinial_trial.ipynb` to get AE, safety, and efficacy predictions for the new clinical trial.
+ - Download all the data and resources needed for trial data parsing from [**here (parsing_package.zip)**](https://snap.stanford.edu/planet/parsing_package.zip). Unzip this and put it in the `./parsing_package` directory. Install the dependencies by following `./parsing_package/README`
+ - Go to `./parsing_package` directory and run `parse_trial.py` to process a new clinical trial (e.g., NCT02370680)
+ - Finally, go to `./notebooks` directory and run `predict_for_new_clinial_trial.ipynb` to get AE, safety, and efficacy predictions for the new clinical trial.
 
 
 

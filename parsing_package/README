@@ -1,0 +1,4 @@
+1. Install java 8
+2. Install python 3.6
+3. Run pip install -r requirements.txt
+
