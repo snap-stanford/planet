@@ -147,10 +147,10 @@ def prepare_runner(args, dataset, encoder, bert_encoder, model, device=0):
     return args, runner, encoder
 
 
-def load_model_and_data(trained_model_path):
+def load_model_and_data(trained_model_path, device=0):
     (dataset, tasks), encoder, bert_encoder, model, args = load_model(trained_model_path)
     dataset = prepare_dataset(dataset)
-    args, runner, encoder = prepare_runner(args, dataset, encoder, bert_encoder, model)
+    args, runner, encoder = prepare_runner(args, dataset, encoder, bert_encoder, model, device)
     return (dataset, tasks), encoder, bert_encoder, model, args, runner
 
 
