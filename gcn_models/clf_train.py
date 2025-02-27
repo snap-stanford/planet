@@ -8,8 +8,10 @@ import torch
 import wandb
 from torch.utils.data import TensorDataset
 
+# Insert the parent directory so that local modules can be imported
 sys.path.insert(0, "../")
 
+# Import local modules for data loading, models, training, etc.
 from gcn_models.data_loader import ClassificationDataset, MultiTaskDataset
 from gcn_models.link_pred_models import ClassificationModel, ClassificationModelWithAEEmb, LinkPredModel
 from gcn_models.clf_trainer import ClassifierTrainer
@@ -24,15 +26,28 @@ from datasets import Dataset, DatasetDict
 from transformers import BertForSequenceClassification, AutoTokenizer, AutoModel, BertModel, Trainer, TrainingArguments
 
 import socket, os, subprocess, datetime
+# Print debug information: hostname, process id and current screen environment variable
 print(socket.gethostname())
-print ("pid:", os.getpid())
-print ("screen: %s" % subprocess.check_output('echo $STY', shell=True).decode('utf'))
-
+print("pid:", os.getpid())
+print("screen: %s" % subprocess.check_output('echo $STY', shell=True).decode('utf'))
 
 
 def generate_data_path(args):
+    """
+    Generate the data path for the dataset based on classification type and threshold parameters.
+    
+    For binary classification (either 'total-based' or True), the path is set to a 'binary_data' subdirectory.
+    Otherwise, the path is generated using event type, frequency threshold, and trial threshold.
+    
+    Args:
+        args: Parsed command-line arguments.
+    
+    Returns:
+        A string representing the path to the dataset directory.
+    """
     base_data_path = args.clf_base_data_path
     column_name = 'ae_freq_percentage'
+    # Check if binary classification should be used
     if args.binary_classification == 'total-based' or args.binary_classification == True:
         data_path = os.path.join(base_data_path, 'binary_data', f'trial_edges_False_RNone')
     else:
@@ -44,16 +59,29 @@ def generate_data_path(args):
 
 
 def populate_encoder_config(args):
+    """
+    Populate encoder configuration parameters in the args object using a JSON config file if available.
+    
+    If an encoder_path is provided, this function loads the 'config.json' file from the same directory,
+    updates args with configuration values, and sets default values for certain attributes.
+    
+    Args:
+        args: Parsed command-line arguments.
+    """
     if not args.encoder_path:
         return
+    # Open the config file located alongside the encoder model
     with open(os.path.join(os.path.dirname(args.encoder_path), 'config.json'), 'r') as f:
         config = json.load(f)['config']
+    # Ensure embedding_size is a list of three ints if it was provided as a single integer
     if type(config['embedding_size']) == int:
         config['embedding_size'] = [config['embedding_size']] * 3
+    # Update args with values from the config for a set of known keys
     for key in ['data_path', 'dataset', 'use_bidirectional', 'use_population', 'remove_function', 'remove_outcomes',
                 'node_feats_path', 'embedding_size', 'dont_include_trial_node_features', 'rgcn_bases', 'activation', 'enc_dropout_prob', 'edge_dropout']:
         if key in config:
             setattr(args, key, config[key])
+    # Set additional attributes in args
     setattr(args, 'layer_sizes', [-1, -1])
     setattr(args, 'remove_function', False)
     if not hasattr(args, 'remove_outcomes'):
@@ -65,18 +93,34 @@ def populate_encoder_config(args):
 
 
 def get_dataset(args, bert_data=False):
+    """
+    Load the dataset and configure tasks based on the provided arguments.
+    
+    Depending on the dataset version and binary classification settings, the function will either
+    instantiate a ClassificationDataset or a MultiTaskDataset, and set up the tasks dictionary accordingly.
+    
+    Args:
+        args: Parsed command-line arguments.
+        bert_data (bool): Flag indicating whether to include BERT data.
+    
+    Returns:
+        dataset: The dataset object for training/evaluation.
+        tasks: A list of dictionaries, where each dictionary describes a task configuration.
+    """
     data_path = args.data_path
 
     dataset = args.dataset
+    # Define the standard file names for the dataset splits
     data_files = ['train.tsv', 'valid.tsv', 'test.tsv']
 
     if args.dataset_version == 1:
+        # For version 1, use ClassificationDataset and generate a clf_data_path accordingly.
         clf_data_path = generate_data_path(args)
         dataset = ClassificationDataset(data_path=data_path, dataset=dataset, data_files=data_files,
                                         bidirectional=args.use_bidirectional, use_population=args.use_population,
                                         remove_function=args.remove_function,
                                         add_extra_dis_gene_edges=args.add_extra_dis_gene_edges,
-                                        test_infer_path=None, #args.test_infer_dataset_path,
+                                        test_infer_path=None,  # args.test_infer_dataset_path,
                                         node_feats_df_path=args.node_feats_path,
                                         label_column_name=args.label_column_name,
                                         is_binary_classification=args.binary_classification,
@@ -101,7 +145,8 @@ def get_dataset(args, bert_data=False):
             'task_weight': 1
         }]
     else:
-        if args.binary_classification == '': #this is the default
+        # For dataset versions other than 1, configure tasks based on binary classification mode.
+        if args.binary_classification == '':  # this is the default
             tasks = [{
                 'name': args.default_task_name,
                 'merge_strategy': 'max' if args.event_type == 'all' else args.event_type,
@@ -120,6 +165,7 @@ def get_dataset(args, bert_data=False):
             }]
         else:
             raise RuntimeError("Unsupported value: ", args.binary_classification)
+        # Add extra tasks if specified in the arguments.
         for idx, task in enumerate(args.extra_tasks):
             tasks.append({
                 'name': task,
@@ -129,19 +175,19 @@ def get_dataset(args, bert_data=False):
                 'subtask_weight': args.task_weight
             })
         clf_data_path = args.clf_base_data_path
-        #this is used
+        # Instantiate a MultiTaskDataset with the provided parameters.
         dataset = MultiTaskDataset(data_path=data_path, dataset=dataset, data_files=data_files,
                                    bidirectional=args.use_bidirectional, use_population=args.use_population,
                                    remove_function=args.remove_function,
                                    add_extra_dis_gene_edges=args.add_extra_dis_gene_edges,
-                                   test_infer_path=None, #args.test_infer_dataset_path,
+                                   test_infer_path=None,  # args.test_infer_dataset_path,
                                    remove_outcomes=args.remove_outcomes,
                                    node_feats_df_path=args.node_feats_path, clf_df_path=clf_data_path,
                                    trial_feats_df_path=args.trial_feats_path,
                                    concat_trial_features=args.concat_trial_features,
-                                   combine_bert=args.combine_bert, #Added
-                                   bert_model_path=args.bert_model_path, #Added
-                                   bert_max_seq_len=args.bert_max_seq_len, #Added
+                                   combine_bert=args.combine_bert,  # Added
+                                   bert_model_path=args.bert_model_path,  # Added
+                                   bert_max_seq_len=args.bert_max_seq_len,  # Added
                                    tasks=tasks,
                                    split=args.split_strategy,
                                    enrollment_filter=args.enrollment_filter,
@@ -154,6 +200,18 @@ def get_dataset(args, bert_data=False):
 
 
 def untrained_encoder(args, dataset):
+    """
+    Initialize an untrained encoder model for link prediction tasks.
+    
+    This function constructs a LinkPredModel using parameters from the dataset and args.
+    
+    Args:
+        args: Parsed command-line arguments containing hyperparameters.
+        dataset: The dataset object which includes graph data and node features.
+    
+    Returns:
+        An instance of LinkPredModel.
+    """
     train_data = dataset.graph.data
     return LinkPredModel(num_relations=train_data.num_relations, in_channels=train_data.num_nodes,
                          hidden_dim=args.embedding_size, emb_df=dataset.node_feats,
@@ -176,52 +234,74 @@ def untrained_encoder(args, dataset):
 
 
 def train_and_save(args, dataset, tasks, summary_prefix):
-    print ('dataset.graph.data.num_nodes', dataset.graph.data.num_nodes)
-    #Added
+    """
+    Train the classification model and save the final checkpoint.
+    
+    This function sets up the model (including optional BERT and encoder components),
+    loads any pre-trained checkpoints if specified, initializes the trainer,
+    and then begins the training loop. Finally, it saves the trained model and optimizer states.
+    
+    Args:
+        args: Parsed command-line arguments.
+        dataset: The dataset object containing training, validation, and test splits.
+        tasks: A list of task configurations.
+        summary_prefix: A string prefix for summarizing different training runs.
+    """
+    # Print out the number of nodes in the graph for debugging
+    print('dataset.graph.data.num_nodes', dataset.graph.data.num_nodes)
+    
+    # Load BERT model if a path is provided
     if args.bert_model_path:
-        print (f'loading BertModel: {args.bert_model_path} ...')
+        print(f'loading BertModel: {args.bert_model_path} ...')
         bert_encoder = AutoModel.from_pretrained(args.bert_model_path)
-        print ('loading BertModel done')
+        print('loading BertModel done')
     else:
         bert_encoder = None
 
-    if args.combine_bert == -1: #only use bert, no GCN
+    # Decide whether to use only BERT or combine with GCN encoder
+    if args.combine_bert == -1:  # only use BERT, no GCN encoder
         encoder = None
         encoder_lr = 0
     else:
-        if args.no_pretraining: #Not used
+        if args.no_pretraining:  # Initialize a new encoder if no pretraining is requested
             print("Initializing new encoder model")
             print(args.layer_sizes)
             encoder = untrained_encoder(args, dataset)
             encoder_lr = args.lr
         else:
-            print ('args.encoder_path', args.encoder_path)
+            # Attempt to load a pretrained encoder from the specified path
+            print('args.encoder_path', args.encoder_path)
             encoder_ckpt = torch.load(args.encoder_path, map_location='cpu') if args.encoder_path else None
             if True:
+                # Temporarily disable BERT dimension and neighbor concatenation
                 args.bert_dim = 0
                 _nbr_concat = args.nbr_concat
                 args.nbr_concat = False
                 encoder = untrained_encoder(args, dataset)
                 if encoder_ckpt:
+                    # Load state dict from checkpoint with strict=False to allow missing/unexpected keys
                     enc_state_dict = encoder_ckpt['model'] if isinstance(encoder_ckpt['model'], dict) else encoder_ckpt['model'].state_dict()
                     missing_keys, unexpected_keys = encoder.load_state_dict(enc_state_dict, strict=False)
-                    print ('missing_keys', missing_keys)
-                    print ('unexpected_keys', unexpected_keys)
+                    print('missing_keys', missing_keys)
+                    print('unexpected_keys', unexpected_keys)
                 else:
                     print("Initializing new encoder model")
                 args.nbr_concat = _nbr_concat
 
+            # Optionally disable dropout in the encoder's trial branch if specified
             if args.no_encoder_dropout_trial:
                 encoder.encoder.no_last_layer_dropout = True
+            # Add an additional RGCNConcat layer if neighbor concatenation is enabled
             if args.nbr_concat:
                 encoder.encoder.convs.append(
                     RGCNConcat(num_relations=dataset.graph.data.num_relations, rel_w=args.nbr_concat_weight,))
                 encoder.encoder.nbr_concat = True
-                args.layer_sizes.append(-1) #Important
+                args.layer_sizes.append(-1)  # Important: Update layer_sizes when concatenation is used
+            # Adjust the encoder learning rate based on checkpoint and scaling factor
             encoder_lr = encoder_ckpt['lr'] / args.encoder_lr_factor if encoder_ckpt else args.lr
     print("Encoder lr is ", encoder_lr)
 
-
+    # Determine input dimension based on settings (e.g., neighbor concatenation, trial features, BERT)
     inp_dim = args.embedding_size[-1] if not args.nbr_concat or args.nbr_concat_weight else args.embedding_size[-1] * 6
     if bert_encoder:
         args.bert_dim = bert_encoder.config.hidden_size
@@ -236,6 +316,7 @@ def train_and_save(args, dataset, tasks, summary_prefix):
         inp_dim += args.trial_feats_size
     elif dataset.trial_features:
         inp_dim = args.trial_feats_size
+    # Instantiate the classification model with provided hyperparameters and tasks
     clf_model = model_class(
         input_dim=inp_dim,
         normalize_embeddings=args.normalize_embeddings,
@@ -250,10 +331,12 @@ def train_and_save(args, dataset, tasks, summary_prefix):
         args=args,
     )
 
+    # Remove decoder from encoder if it exists (not needed for classification)
     if hasattr(encoder, 'decoder'):
         del encoder.decoder
     print(encoder)
 
+    # Handle various checkpoint loading scenarios
     if args.init_ckpt > 0:
         logging.info(f'Loading checkpoint {args.init_ckpt}, {args.ckpt_path}...')
         ckpt = torch.load(args.ckpt_path, map_location='cpu')
@@ -266,7 +349,7 @@ def train_and_save(args, dataset, tasks, summary_prefix):
         encoder_lr = ckpt['encoder_lr']
         print(current_steps)
     elif args.load_trained_model_path:
-        print (f'Loading model from {args.load_trained_model_path} ...')
+        print(f'Loading model from {args.load_trained_model_path} ...')
         ckpt = torch.load(args.load_trained_model_path, map_location='cpu')
         if encoder is not None and ckpt['encoder'] is not None:
             encoder.load_state_dict(ckpt['encoder'])
@@ -275,6 +358,7 @@ def train_and_save(args, dataset, tasks, summary_prefix):
         try:
             clf_model.load_state_dict(ckpt['model'])
         except:
+            # In case of mismatch, ignore some keys that are not critical
             state_name_to_ignore = {r"task_heads[.]*", r"task_losses[.]*", r"AEemb[.]*"}
             for name, param in ckpt['model'].items():
                 ignore = False
@@ -283,36 +367,39 @@ def train_and_save(args, dataset, tasks, summary_prefix):
                         ignore = True
                         break
                 if not ignore:
-                    print ('params: keeping', name)
+                    print('params: keeping', name)
                     param = param.data
                     clf_model.state_dict()[name].copy_(param)
                 else:
-                    print ('params: not keeping', name)
+                    print('params: not keeping', name)
         current_steps = 0
         warm_up_steps = args.warm_up_steps
         lr = args.lr
     elif args.load_trained_model_bert_path or args.load_trained_model_rgcn_path:
         if args.load_trained_model_bert_path:
-            print (f'Loading bert model from {args.load_trained_model_bert_path} ...')
+            print(f'Loading bert model from {args.load_trained_model_bert_path} ...')
             ckpt = torch.load(args.load_trained_model_bert_path, map_location='cpu')
             bert_encoder.load_state_dict(ckpt['bert_encoder'])
         if args.load_trained_model_rgcn_path:
-            print (f'Loading rgcn model from {args.load_trained_model_rgcn_path} ...')
+            print(f'Loading rgcn model from {args.load_trained_model_rgcn_path} ...')
             ckpt = torch.load(args.load_trained_model_rgcn_path, map_location='cpu')
             missing_keys, unexpected_keys = encoder.load_state_dict(ckpt['encoder'], strict=False)
-            print ('load_trained_model_rgcn_path: missing_keys', missing_keys)
-            print ('load_trained_model_rgcn_path: unexpected_keys', unexpected_keys)
+            print('load_trained_model_rgcn_path: missing_keys', missing_keys)
+            print('load_trained_model_rgcn_path: unexpected_keys', unexpected_keys)
         current_steps = 0
         warm_up_steps = args.warm_up_steps
         lr = args.lr
     else:
-        logging.info('Randomly Initializing Model...'); print ('Randomly Initializing Model...')
+        logging.info('Randomly Initializing Model...'); print('Randomly Initializing Model...')
         current_steps = 0
         warm_up_steps = args.warm_up_steps
         lr = args.lr
+
+    # Save the current configuration to a JSON file for future reference
     with open(os.path.join(args.log_dir, 'config.json'), 'w') as f:
         json.dump({'config': args.__dict__}, f)
 
+    # Initialize the trainer with the model, encoder, dataset splits, and training hyperparameters.
     trainer = ClassifierTrainer(model=clf_model,
                                 encoder=encoder,
                                 bert_encoder=bert_encoder,
@@ -339,88 +426,123 @@ def train_and_save(args, dataset, tasks, summary_prefix):
                                 fp16=args.fp16,
                                 summary_prefix=summary_prefix, args=args)
 
-    print ('Model Parameter Configuration:')
+    # Print model parameter configurations for debugging
+    print('Model Parameter Configuration:')
     for name, param in clf_model.named_parameters():
-        print ('Parameter %s: %s, require_grad = %s' % (name, str(param.size()), str(param.requires_grad)))
+        print('Parameter %s: %s, require_grad = %s' % (name, str(param.size()), str(param.requires_grad)))
     if encoder is not None:
         for name, param in encoder.named_parameters():
-            print ('Parameter %s: %s, require_grad = %s' % (name, str(param.size()), str(param.requires_grad)))
+            print('Parameter %s: %s, require_grad = %s' % (name, str(param.size()), str(param.requires_grad)))
     if bert_encoder is not None:
         for name, param in bert_encoder.named_parameters():
-            print ('Parameter %s: %s, require_grad = %s' % (name, str(param.size()), str(param.requires_grad)))
+            print('Parameter %s: %s, require_grad = %s' % (name, str(param.size()), str(param.requires_grad)))
 
+    # Set up model monitoring with wandb
     wandb.watch(clf_model)
     if bert_encoder is not None:
         wandb.watch(bert_encoder)
+    # The encoder is optionally watched; commented out for now:
     # if encoder is not None:
     #     wandb.watch(encoder)
 
+    # If a checkpoint was loaded, restore the optimizer state
     if args.init_ckpt > 0:
         trainer.optimizer = optimizer
 
     num_steps = args.num_epochs
     try:
+        # Begin the training loop
         trainer.train_loop(num_epochs=args.num_epochs, old_epochs=current_steps, val_every=args.valid_every)
 
+        # Save the final model checkpoint along with optimizer and encoder states
         encoder_save = trainer.encoder.state_dict() if trainer.encoder is not None else None
         bert_encoder_save = trainer.bert_encoder.state_dict() if trainer.bert_encoder is not None else None
         torch.save({'model': trainer.model.state_dict(), 'optimizer': trainer.optimizer.state_dict(), 'steps': num_steps,
                     "encoder": encoder_save, 'bert_encoder': bert_encoder_save},
                    os.path.join(args.log_dir, 'final.pt'))
+        # If using variance-based task weighting, print the exponentiated negative log variances.
         if args.task_weight == 'variance':
             print(torch.exp(-clf_model.task_loss.log_vars))
     except Exception as err:
+        # In case of error during training, clean up and re-raise the exception
         del trainer
         raise err
 
 
 def main(args: argparse.Namespace):
-    # Write logs to checkpoint and console
+    """
+    Main entry point for training the classification model.
+    
+    This function initializes logging, sets random seeds, configures wandb, loads the dataset,
+    prepares task configurations, and starts the training process.
+    
+    Args:
+        args: Parsed command-line arguments.
+    """
+    # If not using pretraining, populate encoder configuration from file if available.
     if not args.no_pretraining:
         populate_encoder_config(args)
 
+    # Generate a timestamp and wandb id to uniquely name the training run.
     dt = datetime.datetime.today().strftime('%Y%m%d_%H%M')
     wandb_id = wandb.util.generate_id()
     wandb_name = f"{dt}--{wandb_id}--{args.exp_name}"
+    # Initialize wandb for logging and experiment tracking.
     wandb.init(config=args, project=args.wandb_project, name=wandb_name, id=wandb_id, dir='../')
     assert wandb.run.id == wandb_id
+    # Create a directory for logging using the wandb name.
     args.log_dir = os.path.join(args.log_dir, wandb_name)
     os.makedirs(args.log_dir)
     print(args.log_dir)
     set_logger(args)
     set_seed(args.random_seed)
 
+    # Ensure that BERT model path is provided when combining with BERT.
     if args.combine_bert:
         assert args.bert_model_path
 
+    # Load the dataset and task configurations.
     dataset, tasks = get_dataset(args)
-    print ('dataset loaded')
+    print('dataset loaded')
+    # Optionally, the dataset can be saved for debugging.
     # torch.save(dataset, os.path.join(args.log_dir, 'clf-dataset.pt'))
-    # print ('dataset saved')
+    # print('dataset saved')
 
+    # Set up positive class weights for binary cross-entropy if weighted loss is used.
     if args.weighted_bce:
         pos_weight = torch.tensor(dataset.pos_weights)
-        print ('Using weighted_bce', len(pos_weight), pos_weight)
+        print('Using weighted_bce', len(pos_weight), pos_weight)
     else:
         pos_weight = torch.ones(tasks[0]['num_subtasks'])
     tasks[0]['pos_weight'] = pos_weight
 
+    # If separate classifiers are requested, train and save a separate model per task.
     if args.separate_classifier:
         num_aes = tasks[0]['num_subtasks']
         tasks[0]['num_subtasks'] = 1
         orig_datasets = dataset.datasets.copy()
         orig_pos_weights = tasks[0]['pos_weight']
         for i in range(num_aes):
+            # Adjust the dataset to include only one subtask at a time.
             for key in orig_datasets:
                 dataset.datasets[key] = TensorDataset(orig_datasets[key].tensors[0],
                                                       orig_datasets[key].tensors[1][:, i:i + 1])
             tasks[0]['pos_weight'] = orig_pos_weights[i]
             train_and_save(args, dataset, tasks, f'ae_{i}')
     else:
+        # Train a single model with all tasks.
         train_and_save(args, dataset, tasks, '')
 
 
 def add_dataset_args(parser):
+    """
+    Add dataset-related command-line arguments to the parser.
+    
+    These include paths for trial features, dataset split strategy, and settings for binary classification.
+    
+    Args:
+        parser: An argparse.ArgumentParser instance.
+    """
     # trial features
     parser.add_argument("--trial-feats-path", type=str, help='Path to the feature df of trial nodes')
     parser.add_argument("--trial-feats-size", type=int, help='Size of trial node embeddings')
@@ -436,7 +558,7 @@ def add_dataset_args(parser):
     parser.add_argument('--no-relations', action='store_true')
     # Args describing the dataset
 
-    # multi-task
+    # multi-task settings
     parser.add_argument('--default-task-name', type=str, required=True)
     parser.add_argument('--extra-tasks', type=str, default=[], nargs='+')
     parser.add_argument('--extra-task-weight', type=float, default=[], nargs='+')
@@ -453,6 +575,11 @@ def add_dataset_args(parser):
 
 
 def add_encoder_args():
+    """
+    Add encoder-related command-line arguments.
+    
+    These include paths for data and node features, options for bidirectionality, dropout, convolution type, etc.
+    """
     parser.add_argument('--data-path', type=str, help='Path of the directory containing the data')
     parser.add_argument('--dataset', type=str, help='Name of the dataset')
     parser.add_argument("--node-feats-path", type=str, help='Path to the feature df')
@@ -476,6 +603,7 @@ def add_encoder_args():
 
 
 if __name__ == '__main__':
+    # Create the top-level parser and add general training arguments.
     parser = argparse.ArgumentParser()
     parser.add_argument('--hidden-size', type=int, nargs='+', default=[])
     parser.add_argument('--num-layers', type=int, default=2)
@@ -489,10 +617,11 @@ if __name__ == '__main__':
     parser.add_argument('--concat-trial-features', action='store_true')
     parser.add_argument('--no-encoder-dropout-trial', action='store_true')
 
+    # Add dataset and encoder related arguments to the parser.
     add_dataset_args(parser)
     add_encoder_args()
 
-    # Encoder
+    # Encoder specific arguments
     parser.add_argument('--encoder-path', type=str)
     parser.add_argument('--fixed-encoder', action='store_true')
     parser.add_argument('--encoder-lr-factor', type=float)
@@ -519,9 +648,7 @@ if __name__ == '__main__':
     parser.add_argument('--combo_weight', type=float, default=0)
     parser.add_argument('--save_model', type=int, default=1)
 
-
-
-    # Ckpt & logging
+    # Checkpoint & logging arguments
     parser.add_argument('--init-ckpt', type=int, default=0)
     parser.add_argument('--ckpt-path', type=str)
     parser.add_argument('--log-dir', type=str)
@@ -529,8 +656,7 @@ if __name__ == '__main__':
     parser.add_argument('--print-on-screen', action='store_true')
     parser.add_argument('--do-valid', action='store_true')
 
-
-    # training
+    # Training hyperparameters and GPU configuration
     parser.add_argument('--gpus', type=int, default=[-1], nargs='+', help='A list of 3 gpu ids, e.g. 0 1 2')
     parser.add_argument('--val-gpus', type=int, default=[-1], nargs='+', help='A list of 3 gpu ids, e.g. 0 1 2')
     parser.add_argument('--batch-size', type=int, default=16)
@@ -548,6 +674,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--wandb_project', type=str, default='clinical_trials')
     parser.add_argument('--exp_name', type=str, default='')
-    parser.add_argument('--fp16', action='store_true') #Not working currently
+    parser.add_argument('--fp16', action='store_true')  # Not working currently
 
+    # Parse command-line arguments and start the main function.
     main(parser.parse_args())

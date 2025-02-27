@@ -16,19 +16,20 @@ from gcn_models.conv_layers.rgat_conv import RGATConv
 from gcn_models.conv_layers.rgat_conv_simple import RGATConvSimple
 from gcn_models.conv_layers.hgt_conv import HGTConv
 
-
 def set_logger(args):
     """
-    Write logs to checkpoint and console
+    Configures logging to write logs to both a file and the console.
+    
+    Args:
+        args: An argument object containing logging configurations such as log directory.
     """
-
-    args.do_train = True
-    args.print_on_screen = True
-    if args.do_train:
-        log_file = os.path.join(args.log_dir, 'train.log')
-    else:
-        log_file = os.path.join(args.log_dir, 'test.log')
-
+    args.do_train = True  # Ensure training mode is enabled
+    args.print_on_screen = True  # Enable console output
+    
+    # Determine log file based on training mode
+    log_file = os.path.join(args.log_dir, 'train.log' if args.do_train else 'test.log')
+    
+    # Set up logging configuration
     logging.basicConfig(
         format='%(asctime)s %(levelname)-8s %(message)s',
         level=logging.INFO,
@@ -36,7 +37,8 @@ def set_logger(args):
         filename=log_file,
         filemode='a'
     )
-
+    
+    # If enabled, also log to the console
     if args.print_on_screen:
         console = logging.StreamHandler()
         console.setLevel(logging.INFO)
@@ -44,8 +46,16 @@ def set_logger(args):
         console.setFormatter(formatter)
         logging.getLogger('').addHandler(console)
 
-
 def get_activation(args):
+    """
+    Returns the activation function based on the argument.
+    
+    Args:
+        args: An argument object containing the activation function type.
+    
+    Returns:
+        A PyTorch activation function class or lambda function.
+    """
     if args.activation == 'relu':
         return nn.ReLU
     elif args.activation == 'leaky_relu':
@@ -55,8 +65,16 @@ def get_activation(args):
     elif args.activation == 'prelu':
         return nn.PReLU
 
-
 def get_norm_layer(args):
+    """
+    Returns the normalization layer based on the argument.
+    
+    Args:
+        args: An argument object containing the normalization layer type.
+    
+    Returns:
+        A PyTorch normalization layer class.
+    """
     if args.norm_layer == 'batchnorm':
         return nn.BatchNorm1d
     elif args.norm_layer == 'layernorm':
@@ -64,8 +82,19 @@ def get_norm_layer(args):
     elif args.norm_layer == 'none':
         return nn.Identity
 
-
 def get_conv_layer(args):
+    """
+    Returns the graph convolutional layer based on the argument.
+    
+    Args:
+        args: An argument object containing the convolution type.
+    
+    Returns:
+        A PyTorch Geometric convolutional layer class or partial function.
+    
+    Raises:
+        RuntimeError: If an invalid convolution type is specified.
+    """
     if args.conv_type == 'rgcn':
         conv_fn = RGCNConv
     elif args.conv_type == 'hgt':
@@ -81,8 +110,13 @@ def get_conv_layer(args):
         raise RuntimeError(f"Not a valid conv type: {args.conv_type}")
     return conv_fn
 
-
 def set_seed(seed):
+    """
+    Sets the random seed for reproducibility.
+    
+    Args:
+        seed (int): The seed value to be used for random number generation.
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
