@@ -405,17 +405,18 @@ class TrialGraphBuilder:
 
         self._determine_results()
         self._filter_mesh_ids()
-
-        if not self.filtered_mesh_ids:
-            self.no_disease = True
-            return
-
         self._build_arms()
+        
         self._disease()
         self._primary_outcome()
         self._interventions()
         if use_population:
             self._population()
+
+        if not self.filtered_mesh_ids:
+            self.no_disease = True
+            return
+        
         if not self.has_results:
             return
         self._results()
@@ -515,17 +516,19 @@ class TrialGraphBuilder:
             non_drug = intervention['intervention_type'] not in ['Drug', 'Placebo']
             for arm_label in arm_group_label:
                 arm_label = arm_label.lower()
-                arm_id = self.arm_labels[arm_label]
-                self.graph_builder.biokg.graph.nodes()[self.arm_key(arm_id)]['attrs']['is_incomplete'] |= is_incomplete
-                self.graph_builder.biokg.graph.nodes()[self.arm_key(arm_id)]['attrs']['non_drug'] |= non_drug
+                if arm_label in self.arm_labels:
+                    arm_id = self.arm_labels[arm_label]
+                    self.graph_builder.biokg.graph.nodes()[self.arm_key(arm_id)]['attrs']['is_incomplete'] |= is_incomplete
+                    self.graph_builder.biokg.graph.nodes()[self.arm_key(arm_id)]['attrs']['non_drug'] |= non_drug
 
             for drug_id in drug_ids:
                 for arm_label in arm_group_label:
                     arm_label = arm_label.lower()
-                    arm_id = self.arm_labels[arm_label]
-                    self.graph_builder.biokg.add_relation(self.arm_key(arm_id), self.graph_builder.drug_key(drug_id),
-                                                          relation='arm_tests_drug',
-                                                          source=Source.CLINICAL_TRIAL)
+                    if arm_label in self.arm_labels:
+                        arm_id = self.arm_labels[arm_label]
+                        self.graph_builder.biokg.add_relation(self.arm_key(arm_id), self.graph_builder.drug_key(drug_id),
+                                                              relation='arm_tests_drug',
+                                                              source=Source.CLINICAL_TRIAL)
 
     def _primary_outcome(self):
         row = self.trial

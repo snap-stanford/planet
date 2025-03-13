@@ -5,6 +5,7 @@ import os
 import pickle
 import math
 import numpy as np
+from datetime import datetime
 
 from data_parsers.external_tools.medex import medex_input
 from data_parsers.external_tools import medex
@@ -208,7 +209,7 @@ def _phase_feature_vec(phases):
     for phase in phases:
         if phase in ['EARLY_PHASE1', 'PHASE1']:
             v[1] = 1
-        elif phase == 'N/A':
+        elif phase in ['N/A', 'NA']:
             v[0] = 1
         elif phase == 'PHASE2':
             v[2] = 1
@@ -281,20 +282,21 @@ def extract_trial_features(extractor, trial_row):
 def get_arm_text(row):
     arm2text = {}
     nct2text = {}
-    summary = row['brief_summary']
+    print('row.keys()', row.keys())
+    summary = row.get('brief_summary', '')
     disease_text = ''
-    for disease in row['condition']:
+    for disease in row.get('condition', []):
         disease_text += disease + " "
     outcome_text = ''
-    if type(row['primary_outcome']) != float:
+    if ('primary_outcome' in row) and (type(row['primary_outcome']) != float):
         for pom in row.get('primary_outcome', []):
             outcome_text += pom.get('measure', '') + " "
-    criteria = row['eligibility_criteria']
+    criteria = row.get('eligibility_criteria', '')
     if type(criteria) == float:
         criteria = ''
 
     arm2intervention = {}
-    for intervention in row['intervention']:
+    for intervention in row.get('intervention', []):
         intervention_text = intervention['intervention_name'] + ' '
         intervention_desc = intervention.get('description', '') + ' '
         arm_group_label = intervention.get('arm_group_label', ['default'])
@@ -304,7 +306,7 @@ def get_arm_text(row):
             arm_label = arm_label.lower()
             arm2intervention[arm_label] = (intervention_text, intervention_desc)
 
-    arms = row['arm_group']
+    arms = row.get('arm_group', '')
     if not isinstance(arms, list):
         arms = [{'arm_group_label': 'default', 'arm_group_type': ''}]
 
@@ -316,8 +318,8 @@ def get_arm_text(row):
             intervention_text, intervention_desc = '', ''
         all_text = " ".join(
             [intervention_text, disease_text, outcome_text, arm_text, summary, intervention_desc, criteria])
-        arm2text[row['nct_id'], idx] = all_text
-        nct2text[row['nct_id']] = [disease_text, outcome_text, summary, criteria]
+        arm2text[row.get('nct_id', ''), idx] = all_text
+        nct2text[row.get('nct_id', '')] = [disease_text, outcome_text, summary, criteria]
     return arm2text, nct2text
 
 
@@ -381,7 +383,8 @@ def load_cuid2term():
     return cuid2term
 
 
-def main(nct_id):
+def main(nct_id, json_path):
+    print('\n***** loading matchers... *****')
     drug_matcher = DrugMatcher(data_paths={
         'drug_data': f'{DATA_DIR}/drug_data/drugs_all_03_04_21.pkl',
         'pubchem_synonyms': f'{DATA_DIR}/drug_data/pubchem-drugbankid-synonyms.json',
@@ -392,19 +395,33 @@ def main(nct_id):
     umls_utils = UMLSUtils(f'{DATA_DIR}/population_data/umls-install/2020AB')
     umls_utils.load_relations()
     cuid2term = load_cuid2term()
+    
+    if nct_id is not None:
+        print('\n***** loading trial from nct_id... *****')
+        trial = parse(nct_id)
+        json.dump(trial, open(f'tmp_requests/individuals/{nct_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.json', 'w'), indent=2)
+    else:
+        print('\n***** loading trial from json... *****')
+        trial = json.load(open(json_path))
 
-    trial = parse(nct_id)
+    print('\n***** run_medex_and_parse_output... *****')
     trial = run_medex_and_parse_output(trial)
+    
+    print('\n***** parse_eligiility_criteria... *****')
     trial = parse_eligiility_criteria(trial)
     trial['mesh_ids'] = disease_matcher.get_disease_ids(trial)
 
+    print('\n***** get_intervention_drug_ids... *****')
     interventions = trial['intervention']
     for intervention in interventions:
         get_intervention_drug_ids(drug_matcher, intervention, trial)
 
+    print('\n***** extract_outcomes... *****')
     trial = extract_outcomes(trial)
+    print('population_extraction...')
     trial = population_extraction(umls_utils, trial)
 
+    print('\n***** build_trial_arms... *****')
     trial_data = build_trial_arms(disease_matcher, drug_matcher, umls_utils, cuid2term, trial)
 
     return trial_data
@@ -412,7 +429,19 @@ def main(nct_id):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process clinical trial data.')
-    parser.add_argument('nctid', type=str, help='NCT ID of the clinical trial', default='NCT02370680')
+    parser.add_argument('-n', '--nctid', type=str, help='NCT ID of the clinical trial', default=None) #default='NCT02370680'
+    parser.add_argument('-j', '--jsonpath', type=str, help='JSON file of the clinical trial', default=None)
     args = parser.parse_args()
+    assert (args.nctid is None and args.jsonpath is not None) or \
+        (args.nctid is not None and args.jsonpath is None), "Please provide only one of --nctid or --jsonpath"
 
-    print(main(args.nctid))
+
+    trial_data = main(args.nctid, args.jsonpath)
+    print(trial_data) 
+
+    
+    if args.nctid is not None:
+        name = args.nctid + f'_{datetime.now().strftime("%Y%m%d%H%M%S")}'
+    else:
+        name = os.path.basename(args.jsonpath).split('.')[0]
+    pickle.dump(trial_data, open(f'tmp/trial_data_{name}.pkl', 'wb'))

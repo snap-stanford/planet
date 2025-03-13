@@ -366,10 +366,10 @@ class UMLSTFIDFMatcher:
                     if not criterion.concept:
                         orig_term = clean_nonascii(criterion.orig_term)
                         term = criterion.term
-                        if term2cid[orig_term] is not None:
+                        if term2cid.get(orig_term, None) is not None:
                             cid = term2cid[orig_term]
                         else:
-                            cid = term2cid[term]
+                            cid = term2cid.get(term, None)
                         if cid is not None:
                             if cid not in cid2concept:
                                 concept = {

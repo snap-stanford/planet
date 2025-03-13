@@ -66,6 +66,8 @@ def _generate_medex_inputs(trial, inputs):
             val += re.sub(r'[^\x00-\x7F]', ' ', text)
         inputs[key] = val
 
+    if 'clinical_results' not in trial:
+        return 
     clinical_results = trial['clinical_results']
     if type(clinical_results) == float or 'reported_events' not in clinical_results:
         return

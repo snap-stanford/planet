@@ -56,6 +56,8 @@ class MedexOutputParser:
         for idx, arm_group in enumerate(arm_groups):
             arm_group['medex_out'] = parseMedexOutput(medex_raw[f'arm_{idx}'])
 
+        if 'clinical_results' not in trial:
+            return trial
         clinical_results = trial['clinical_results']
         if type(clinical_results) == float or 'reported_events' not in clinical_results:
             return trial
